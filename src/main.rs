@@ -28,6 +28,8 @@ enum KeyCombination {
     LAlt2,
     LAlt3,
     LAlt4,
+    LAltQ,
+    LAltE,
     None,
 }
 
@@ -71,8 +73,11 @@ fn main() {
                     if pressed {
                         let pressed = MouseButton::from(index);
                         if pressed != last_pressed {
-                            mouse_tx.force_push(Event::from(pressed));
-                            last_pressed = pressed;
+                            let event = Event::from(pressed);
+                            if event != Event::Silent {
+                                mouse_tx.force_push(event);
+                                last_pressed = pressed;
+                            }
                         }
                     }
                 });
@@ -89,23 +94,27 @@ fn main() {
             let keys_pressed = device_state.get_keys();
             let key_combination = KeyCombination::from(keys_pressed);
             if key_combination != last_pressed {
-                keyboard_tx.force_push(Event::from(key_combination));
-                last_pressed = key_combination;
+                let event = Event::from(key_combination);
+                if event != Event::Silent {
+                    keyboard_tx.force_push(event);
+                    last_pressed = key_combination;
+                }
             }
             thread::sleep(SLEEP_DURATION);
         }
     });
 
     thread::spawn(move || {
-        tracing::info!("Starting event consumer...");
-        tokio::runtime::Builder::new_current_thread()
+        tokio::runtime::Builder::new_multi_thread()
             .enable_all()
+            .worker_threads(2)
             .build()
             .unwrap()
+            .handle()
             .block_on(async move {
                 let _ = tokio::join!(
-                    spawn(&args.url, mouse_queue),
-                    spawn(&args.url, keyboard_queue)
+                    spawn(&args.url, mouse_queue, "Mouse Logger"),
+                    spawn(&args.url, keyboard_queue, "Keyboard Logger"),
                 );
             });
     });
@@ -147,14 +156,18 @@ impl From<MouseButton> for Event {
 impl From<Vec<Keycode>> for KeyCombination {
     fn from(keys: Vec<Keycode>) -> KeyCombination {
         if keys.contains(&Keycode::LAlt) && keys.len() == 2 {
-            if keys.contains(&Keycode::Numpad1) {
+            if keys.contains(&Keycode::Key1) {
                 KeyCombination::LAlt1
-            } else if keys.contains(&Keycode::Numpad2) {
+            } else if keys.contains(&Keycode::Key2) {
                 KeyCombination::LAlt2
-            } else if keys.contains(&Keycode::Numpad3) {
+            } else if keys.contains(&Keycode::Key3) {
                 KeyCombination::LAlt3
-            } else if keys.contains(&Keycode::Numpad4) {
+            } else if keys.contains(&Keycode::Key4) {
                 KeyCombination::LAlt4
+            } else if keys.contains(&Keycode::Q) {
+                KeyCombination::LAltQ
+            } else if keys.contains(&Keycode::E) {
+                KeyCombination::LAltE
             } else {
                 KeyCombination::None
             }
@@ -171,22 +184,27 @@ impl From<KeyCombination> for Event {
             KeyCombination::LAlt2 => Event::AimModeNeck,
             KeyCombination::LAlt3 => Event::AimModeChest,
             KeyCombination::LAlt4 => Event::AimModeAbdomen,
+            KeyCombination::LAltQ => Event::AimOff,
+            KeyCombination::LAltE => Event::AimOn,
             _ => Event::Silent,
         }
     }
 }
 
-fn spawn(url: &str, queue: Arc<ArrayQueue<Event>>) -> tokio::task::JoinHandle<()> {
+fn spawn(url: &str, queue: Arc<ArrayQueue<Event>>, task_name: &str) -> tokio::task::JoinHandle<()> {
     let url = url.to_string();
+    let task_name = task_name.to_string();
     tokio::spawn(async move {
+        tracing::info!("Spawning task {}...", task_name);
         let client = reqwest::Client::new();
         loop {
             if let Some(event) = queue.pop() {
+                tracing::info!("Received event: {:?}", event);
                 if event != Event::Silent {
                     let id = event as usize;
                     let result = client
                         .put(format!("{url}/stream/event/{id}"))
-                        .timeout(Duration::from_secs(10))
+                        .timeout(Duration::from_secs(5))
                         .send()
                         .await;
                     match result {
