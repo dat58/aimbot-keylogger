@@ -51,7 +51,8 @@ struct Args {
 
 fn main() {
     tracing_subscriber::fmt::init();
-    let args = Args::parse();
+    let mut args = Args::parse();
+    args.url = args.url.trim_end_matches('/').to_string();
     let mouse_queue = Arc::new(ArrayQueue::new(1));
     let keyboard_queue = Arc::new(ArrayQueue::new(1));
 
