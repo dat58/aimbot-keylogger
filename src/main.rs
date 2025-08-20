@@ -50,6 +50,10 @@ struct Args {
     #[clap(short, long, default_value = "http://localhost:10000")]
     /// The URL of the Aimbot's event listener is serving
     url: String,
+
+    #[clap(short, long, default_value = "3")]
+    /// Retry time when call api failed
+    retry: u8,
 }
 
 fn main() {
@@ -104,8 +108,8 @@ fn main() {
             .handle()
             .block_on(async move {
                 let _ = tokio::join!(
-                    spawn(&args.url, mouse_queue, "Mouse Logger"),
-                    spawn(&args.url, keyboard_queue, "Keyboard Logger"),
+                    spawn(&args.url, mouse_queue, "Mouse Logger", args.retry),
+                    spawn(&args.url, keyboard_queue, "Keyboard Logger", args.retry),
                 );
             });
     });
@@ -210,7 +214,12 @@ impl From<KeyCombination> for Event {
     }
 }
 
-fn spawn(url: &str, queue: Arc<ArrayQueue<Event>>, task_name: &str) -> tokio::task::JoinHandle<()> {
+fn spawn(
+    url: &str,
+    queue: Arc<ArrayQueue<Event>>,
+    task_name: &str,
+    retry: u8,
+) -> tokio::task::JoinHandle<()> {
     let url = url.to_string();
     let task_name = task_name.to_string();
     tokio::spawn(async move {
@@ -221,18 +230,26 @@ fn spawn(url: &str, queue: Arc<ArrayQueue<Event>>, task_name: &str) -> tokio::ta
                 tracing::info!("Received event: {:?}", event);
                 if event != Event::Silent {
                     let id = event as usize;
-                    let result = client
-                        .put(format!("{url}/stream/event/{id}"))
-                        .timeout(Duration::from_secs(5))
-                        .send()
-                        .await;
-                    match result {
-                        Ok(resp) => {
-                            if resp.status().is_success() {
-                                tracing::info!("Sent event {event:?} successfully",);
+                    for _ in 0..retry {
+                        let result = client
+                            .put(format!("{url}/stream/event/{id}"))
+                            .timeout(Duration::from_secs(5))
+                            .send()
+                            .await;
+                        match result {
+                            Ok(resp) => {
+                                if resp.status().is_success() {
+                                    tracing::info!("Sent event {event:?} successfully",);
+                                    break;
+                                } else {
+                                    tracing::error!(
+                                        "Sent event {event:?} failed with status {:?}",
+                                        resp.status()
+                                    );
+                                }
                             }
+                            Err(err) => tracing::error!("{:?}", err),
                         }
-                        Err(err) => tracing::error!("{:?}", err),
                     }
                 }
             }
