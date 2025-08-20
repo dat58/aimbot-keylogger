@@ -1,6 +1,7 @@
 use clap::Parser;
 use crossbeam::queue::ArrayQueue;
 use device_query::{DeviceQuery, DeviceState, Keycode};
+use rdev::{Button, EventType, listen};
 use std::{
     sync::{
         Arc,
@@ -61,27 +62,17 @@ fn main() {
     let mouse_tx = mouse_queue.clone();
     thread::spawn(move || {
         tracing::info!("Waiting for mouse input...");
-        let device_state = DeviceState::new();
-        let mut last_pressed = MouseButton::None;
-        loop {
-            let mouse = device_state.get_mouse();
-            mouse
-                .button_pressed
-                .into_iter()
-                .enumerate()
-                .for_each(|(index, pressed)| {
-                    if pressed {
-                        let pressed = MouseButton::from(index);
-                        if pressed != last_pressed {
-                            let event = Event::from(pressed);
-                            if event != Event::Silent {
-                                mouse_tx.force_push(event);
-                                last_pressed = pressed;
-                            }
-                        }
-                    }
-                });
-            thread::sleep(SLEEP_DURATION);
+        if let Err(error) = listen(move |event| {
+            let pressed = match event.event_type {
+                EventType::ButtonPress(button) => MouseButton::from(button),
+                _ => MouseButton::None,
+            };
+            let event = Event::from(pressed);
+            if event != Event::Silent {
+                mouse_tx.force_push(event);
+            }
+        }) {
+            tracing::error!("Error listening for mouse events: {:?}", error);
         }
     });
 
@@ -139,6 +130,34 @@ impl From<usize> for MouseButton {
             4 => MouseButton::Side1,
             5 => MouseButton::Side2,
             _ => MouseButton::None,
+        }
+    }
+}
+
+impl From<Button> for MouseButton {
+    fn from(button: Button) -> MouseButton {
+        match button {
+            Button::Left => MouseButton::Left,
+            Button::Right => MouseButton::Right,
+            Button::Middle => MouseButton::Middle,
+            Button::Unknown(id) => {
+                #[cfg(not(unix))]
+                if id == 2 {
+                    MouseButton::Side1
+                } else if id == 1 {
+                    MouseButton::Side2
+                } else {
+                    MouseButton::None
+                }
+                #[cfg(unix)]
+                if id == 9 {
+                    MouseButton::Side1
+                } else if id == 8 {
+                    MouseButton::Side2
+                } else {
+                    MouseButton::None
+                }
+            }
         }
     }
 }
