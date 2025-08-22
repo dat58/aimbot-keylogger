@@ -25,12 +25,12 @@ enum MouseButton {
 
 #[derive(Clone, Debug, Copy, PartialEq)]
 enum KeyCombination {
-    LAlt1,
-    LAlt2,
-    LAlt3,
-    LAlt4,
-    LAltQ,
-    LAltE,
+    LControlW,
+    LControlA,
+    LControlS,
+    LControlD,
+    LControlQ,
+    LControlE,
     None,
 }
 
@@ -51,7 +51,7 @@ struct Args {
     /// The URL of the Aimbot's event listener is serving
     url: String,
 
-    #[clap(short, long, default_value = "3")]
+    #[clap(short, long, default_value = "5")]
     /// Retry time when call api failed
     retry: u8,
 }
@@ -178,19 +178,19 @@ impl From<MouseButton> for Event {
 
 impl From<Vec<Keycode>> for KeyCombination {
     fn from(keys: Vec<Keycode>) -> KeyCombination {
-        if keys.contains(&Keycode::LAlt) && keys.len() == 2 {
-            if keys.contains(&Keycode::Key1) {
-                KeyCombination::LAlt1
-            } else if keys.contains(&Keycode::Key2) {
-                KeyCombination::LAlt2
-            } else if keys.contains(&Keycode::Key3) {
-                KeyCombination::LAlt3
-            } else if keys.contains(&Keycode::Key4) {
-                KeyCombination::LAlt4
+        if keys.contains(&Keycode::LControl) && keys.len() == 2 {
+            if keys.contains(&Keycode::W) {
+                KeyCombination::LControlW
+            } else if keys.contains(&Keycode::A) {
+                KeyCombination::LControlA
+            } else if keys.contains(&Keycode::S) {
+                KeyCombination::LControlS
+            } else if keys.contains(&Keycode::D) {
+                KeyCombination::LControlD
             } else if keys.contains(&Keycode::Q) {
-                KeyCombination::LAltQ
+                KeyCombination::LControlQ
             } else if keys.contains(&Keycode::E) {
-                KeyCombination::LAltE
+                KeyCombination::LControlE
             } else {
                 KeyCombination::None
             }
@@ -203,12 +203,12 @@ impl From<Vec<Keycode>> for KeyCombination {
 impl From<KeyCombination> for Event {
     fn from(comb: KeyCombination) -> Event {
         match comb {
-            KeyCombination::LAlt1 => Event::AimModeHead,
-            KeyCombination::LAlt2 => Event::AimModeNeck,
-            KeyCombination::LAlt3 => Event::AimModeChest,
-            KeyCombination::LAlt4 => Event::AimModeAbdomen,
-            KeyCombination::LAltQ => Event::AimOff,
-            KeyCombination::LAltE => Event::AimOn,
+            KeyCombination::LControlW => Event::AimModeHead,
+            KeyCombination::LControlA => Event::AimModeNeck,
+            KeyCombination::LControlS => Event::AimModeChest,
+            KeyCombination::LControlD => Event::AimModeAbdomen,
+            KeyCombination::LControlQ => Event::AimOff,
+            KeyCombination::LControlE => Event::AimOn,
             _ => Event::Silent,
         }
     }
