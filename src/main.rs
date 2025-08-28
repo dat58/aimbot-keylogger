@@ -233,7 +233,7 @@ fn spawn(
                     for _ in 0..retry {
                         let result = client
                             .put(format!("{url}/stream/event/{id}"))
-                            .timeout(Duration::from_secs(5))
+                            .timeout(Duration::from_secs(2))
                             .send()
                             .await;
                         match result {
