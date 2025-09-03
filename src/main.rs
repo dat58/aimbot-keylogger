@@ -253,6 +253,7 @@ fn spawn(
                     }
                 }
             }
+            tokio::time::sleep(SLEEP_DURATION).await;
         }
     })
 }
